@@ -51,6 +51,8 @@ loadSNPData <- function(snp.data,
                         genome = NULL,
                         verbose = TRUE) {
   
+  # TODO: check parameters
+  
   #If its a file, try to load it
   if(is.character(snp.data)) {
     #if file dose not exist
@@ -60,12 +62,9 @@ loadSNPData <- function(snp.data,
     
     if(verbose) message("Reading data from ", snp.data)
     
-    #It is problematic with snparray data
-    # #Try to load it using toGRanges
-    # snps <- tryCatch(regioneR::toGRanges(snp.data, genome = genome), error = function(e){return(NULL)}, warning = function(w){})
+    
     snps <- NULL
     
-    #if the toGRanges failed, try with a series of read.tabe statements
     if(is.null(snps)) snps <- tryCatch(utils::read.table(snp.data, sep = "\t", header = TRUE, stringsAsFactors = FALSE),
                                        error = function(e) return(NULL))
     if(is.null(snps)) snps <- tryCatch(utils::read.table(snp.data, sep = ";", header = TRUE, stringsAsFactors = FALSE),
@@ -82,60 +81,62 @@ loadSNPData <- function(snp.data,
   #If it's  not a GRanges, try to convert it into a GRanges
   
   if(!methods::is(snp.data, "GRanges")) {
-    #snps <- tryCatch(regioneR::toGRanges(snp.data, genome = genome), error = function(e){return(NULL)}, warning = function(w){})
-    snps <- NULL
-    if(is.null(snps)) { #If toGRanges failed try to identify columns by name
-      chr.col <- getChrColumn(col = chr.col, df = snp.data, needed = TRUE,  verbose = verbose)
-      start.col <- getStartColumn(col = start.col, df = snp.data, needed = FALSE, verbose = verbose)
-      end.col <- getEndColumn(col = end.col, df = snp.data, needed = FALSE, verbose = verbose)
-      pos.col <- getPosColumn(col = pos.col, df = snp.data, needed = FALSE, verbose = verbose)
+    
+    # Try to identify columns by name
+    chr.col <- getChrColumn(col = chr.col, df = snp.data, needed = TRUE,  verbose = verbose)
+    start.col <- getStartColumn(col = start.col, df = snp.data, needed = FALSE, verbose = verbose)
+    end.col <- getEndColumn(col = end.col, df = snp.data, needed = FALSE, verbose = verbose)
+    pos.col <- getPosColumn(col = pos.col, df = snp.data, needed = FALSE, verbose = verbose)
       
-     
-      # chr.col
-      if(!is.null(chr.col)) names(snp.data)[chr.col] <- "chr"
-      
-      # snp position
-      
-      if (!is.null(pos.col)) {
-        start.col <- pos.col
-        end.col <- pos.col
-      } else {
-        if(is.null(start.col) || is.null(end.col)){
-          stop("It was not possible to identify the required data: either Start and End or Position is requierd")
-        } 
-      }  
+    if(is.null(chr.col)) stop("chr column was not identified")
+    # pos.col takes precedence over start and end
+    if (!is.null(pos.col)) {
+      start.col <- pos.col
+      end.col <- pos.col
+    } else {
+      if(is.null(start.col) || is.null(end.col)){
+        stop("It was not possible to identify the required data: either Start and End or Position is requierd")
+      } 
+    }  
       
 
-      other.cols <- seq_len(length(snp.data))[!(seq_len(length(snp.data)) %in% c(chr.col, start.col, end.col))]
-      columns <- c(chr.col, start.col, end.col, other.cols)
-      snps <- tryCatch(regioneR::toGRanges(snp.data[,columns], genome = genome), 
-                       error = function(e){
-                         stop("It was not possible to transform the data into a GRanges. Is there any format specific data loading function available? ", e)
-                       },
-                       warning = function(w){})
-    }
-    if(!methods::is(snps, "GRanges")) stop("It was not possible to read and transform the data. Is there any format specific data loading function available?")
-  } else {
-    #If it is a GRanges, simply change its name
-    snps <- snp.data
-  }
+    other.cols <- seq_len(length(snp.data))[!(seq_len(length(snp.data)) %in% c(chr.col, start.col, end.col))]
+    columns <- c(chr.col, start.col, end.col, other.cols)
+    snp.data <- tryCatch(regioneR::toGRanges(snp.data[,columns]), 
+                     error = function(e){
+                       stop("It was not possible to transform the data into a GRanges. Is there any format specific data loading function available? ", e)
+                     },
+                     warning = function(w){})
+  
+    #if(!methods::is(snps, "GRanges")) stop("It was not possible to read and transform the data. Is there any format specific data loading function available?")
+  } 
+  
+  # snp.data <- regioneR::setgenometogr(gr, genoma)
+  
+  #toucscstyle de los seqnames del gr
+  #toucscstyle del genoma
+  #regioneR::getgenome --> tenemos el genoma y hacemos ucscstyle de los seqnames de esto
+  # y miramos si hay alguno de los de gr que no este en el genoma
+  
+  
+  
   
   #BAF
-  baf.col <- getBAFColumn(df = GenomicRanges::mcols(snps), col = baf.col, needed = FALSE, verbose = verbose)
-  if(!is.null(baf.col))  names(GenomicRanges::mcols(snps))[baf.col] <- "baf"
+  baf.col <- getBAFColumn(df = GenomicRanges::mcols(snp.data), col = baf.col, needed = FALSE, verbose = verbose)
+  if(!is.null(baf.col))  names(GenomicRanges::mcols(snp.data))[baf.col] <- "baf"
 
   
   #LRR
-  lrr.col <- getLRRColumn(df = GenomicRanges::mcols(snps), col = lrr.col, needed = FALSE, verbose = verbose)
-  if(!is.null(lrr.col)) names(GenomicRanges::mcols(snps))[lrr.col] <- "lrr"
+  lrr.col <- getLRRColumn(df = GenomicRanges::mcols(snp.data), col = lrr.col, needed = FALSE, verbose = verbose)
+  if(!is.null(lrr.col)) names(GenomicRanges::mcols(snp.data))[lrr.col] <- "lrr"
   
   #ID
-  id.col <-  getIDColumn(df = GenomicRanges::mcols(snps), col = id.col, avoid.pattern = "sample", needed = FALSE, verbose = verbose)
-  if(!is.null(id.col))names(GenomicRanges::mcols(snps))[id.col] <- "id"
+  id.col <-  getIDColumn(df = GenomicRanges::mcols(snp.data), col = id.col, avoid.pattern = "sample", needed = FALSE, verbose = verbose)
+  if(!is.null(id.col))names(GenomicRanges::mcols(snp.data))[id.col] <- "id"
   
-  snps <- sort(snps)
+  snp.data <- sort(snp.data)
   
-  return(snps)
+  return(snp.data)
 }
 
 
